@@ -11,6 +11,7 @@
 
 class ConfigReader {
 public:
+	bool m_virtual, m_tlb, m_l2;
 
 	// different category options for the config
 	std::set<std::string> m_categories = {
@@ -32,6 +33,17 @@ public:
 	// read the configuration file
 	void read(std::string filename);
 
+	// prints the config information as specified in the write-up
+	void print();
+
+	// quick way to access config data
+	std::map<std::string, int>& operator[](std::string str);
+
+
+	// non-category specifications
+	const bool using_virtual() { return m_virtual; }
+	const bool using_tlb() { return m_tlb; }
+	const bool using_l2() { return m_l2; }
 };
 
 
@@ -77,9 +89,45 @@ void ConfigReader::read(std::string filename)
 			active = line;
 		} else {
 			std::pair<std::string, int> parsed = name_value_splicer(line);
-			m_config[active][parsed.first] = parsed.second;
+
+			if (parsed.first == "Virtual addresses") {
+				m_virtual = parsed.second;
+			}
+			else if (parsed.first == "TLB") {
+				m_tlb = parsed.second;
+			}
+			else if (parsed.first == "L2 cache") {
+				m_l2 = parsed.second;
+			}
+			else {
+				m_config[active][parsed.first] = parsed.second;
+			}
 		}
 	}
 
 	in.close();
+}
+
+std::map<std::string, int>& ConfigReader::operator[](std::string str) 
+{
+	if (str == "tlb") {
+		return m_config["Data TLB configuration"];
+	}
+	else if (str == "pt") {
+		return m_config["Page Table configuration"];
+	}
+	else if (str == "l1") {
+		return m_config["Data Cache configuration"];
+	}
+	else if (str == "l2") {
+		return m_config["Virtual addresses"];
+	}
+	else {
+		std::cout << "operator error in ConfigReader";
+	}
+}
+
+void ConfigReader::print() 
+{
+
 }
