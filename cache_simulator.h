@@ -98,14 +98,26 @@ Address Cache::segment_address(std::string str)
 	std::stringstream ss(str);
 
 	// convert the hex string value into an integer
-	int address_value = 0;
+	unsigned int address_value = 0;
 	ss >> std::hex >> address_value;
 
-	int offset_bit_count = calculate_bits_required(block_size);
-	int index_bit_count = calculate_bits_required(set_size);
-	int tag_bit_count = m_physical_address_size - index_bit_count - offset_bit_count;
+	unsigned int offset_bit_count = calculate_bits_required(block_size);
+	unsigned int index_bit_count = calculate_bits_required(n_sets);
+	unsigned int tag_bit_count = m_physical_address_size - index_bit_count - offset_bit_count;
 
-	return Address();
+
+	// get the offset value
+	unsigned int tmp = (sizeof(int) * 8 - offset_bit_count);
+	result.offset = (address_value << tmp) >> tmp;
+
+	// get the index value
+	tmp = (sizeof(int) * 8 - offset_bit_count - index_bit_count);
+	result.index = (address_value << tmp) >> (tmp + offset_bit_count);
+
+	// get the tag value
+	result.tag = address_value >> (index_bit_count + offset_bit_count);
+
+	return result;
 }
 
 
