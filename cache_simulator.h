@@ -40,12 +40,14 @@ struct Address {
 
 class Cache {
 public:
+	std::string name;
 
 	// this is used to help calculate LRU
 	int timer = 0;
 
 	std::map<std::string, int> m_config;
 	std::vector<CacheSet> m_cache;
+	Cache* m_next_layer = nullptr;
 
 	int m_virtual_address_size = 0, m_physical_address_size = 0;
 	int n_sets = 0, set_size = 0, block_size = 0;
@@ -67,16 +69,21 @@ public:
 	// reads from memory at the specified address
 	void read(std::string address);
 
+	// writes to memory at a specific address
+	void write(std::string address);
 
-	Cache(std::map<std::string, int> config, std::map<std::string, int>* page_table);
+	// connect the next level of cache. for instance L1.attach(L2); L2.attach(L3);
+	void attach(Cache* next_level);
+
+	Cache(std::map<std::string, int> config, std::string _name, std::map<std::string, int>* page_table);
 };
 
 
 
-Cache::Cache(std::map<std::string, int> config, std::map<std::string, int>* page_table_ptr = nullptr)
-	: m_config(config) 
+Cache::Cache(std::map<std::string, int> config, std::string _name, std::map<std::string, int>* page_table_ptr = nullptr)
+	: m_config(config), name(_name)
 {
-
+	name = _name;
 	// get information for the cache size and specifications
 	n_sets = config["Number of sets"];
 	set_size = config["Set size"];
@@ -162,7 +169,6 @@ bool Cache::check_if_exists(int tag, int index)
 			return true;
 		}
 	}
-
 	return false;
 }
 
@@ -177,7 +183,15 @@ void Cache::read(std::string _address)
 		return;
 	}
 
-	//TODO: look_in_next_level_cache()
+	std::cout << "miss in L1 at address " << _address << std::endl;
+
+	// read the value from the next layer
+	if (m_next_layer) {
+		m_next_layer->read(_address);
+	} else {
+		std::cout << "Read from memory" << std::endl;
+	}
+
 	find_place(address.index, address.tag);
 }
 
@@ -196,6 +210,7 @@ void Cache::find_place(int index, int tag)
 			cs.entries[i].tag = tag;
 		}
 
+		// update LRU meta if needed
 		if (cs.entries[i].used_time < lowest_value) {
 			lowest_value = cs.entries[i].used_time;
 			lowest_index = i;
@@ -208,4 +223,16 @@ void Cache::find_place(int index, int tag)
 	cs.entries[lowest_index].tag = tag;
 	cs.entries[lowest_index].used_time = timer;
 	timer++;
+}
+
+
+void Cache::attach(Cache* next_layer)
+{
+	m_next_layer = next_layer;
+}
+
+
+void Cache::write(std::string address)
+{
+
 }

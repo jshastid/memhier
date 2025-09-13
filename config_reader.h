@@ -116,7 +116,7 @@ std::map<std::string, int>& ConfigReader::operator[](std::string str)
 		return m_config["Data Cache configuration"];
 	}
 	else if (str == "l2") {
-		return m_config["Virtual addresses"];
+		return m_config["L2 Cache configuration"];
 	}
 	else {
 		std::cout << "operator error in ConfigReader";
