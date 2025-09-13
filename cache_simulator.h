@@ -18,6 +18,8 @@ struct CacheBlock {
 
 struct CacheEntry {
 	int tag = -1;
+	unsigned int used_time = -1;
+
 	CacheBlock cb;
 
 	CacheEntry(size_t block_size)
@@ -39,6 +41,9 @@ struct Address {
 class Cache {
 public:
 
+	// this is used to help calculate LRU
+	int timer = 0;
+
 	std::map<std::string, int> m_config;
 	std::vector<CacheSet> m_cache;
 
@@ -52,7 +57,16 @@ public:
 	// given a size, determines number of bits to index that size
 	int calculate_bits_required(int n);
 
+	// check to see if a value exists in the current level of cache
+	bool check_if_exists(int tag, int index);
+
+	// finds a place to put tag in cache set index. uses LRU eviction if needed
+	void find_place(int index, int tag);
+
 public:
+	// reads from memory at the specified address
+	void read(std::string address);
+
 
 	Cache(std::map<std::string, int> config, std::map<std::string, int>* page_table);
 };
@@ -129,4 +143,69 @@ int Cache::calculate_bits_required(int n)
 
 	std::cout << "bit calculator error: given improper value" << std::endl;
 	return -1;
+}
+
+
+
+bool Cache::check_if_exists(int tag, int index)
+{
+	// select the set which the value should be
+	CacheSet& cs = m_cache[index % n_sets];
+	
+	for (size_t i = 0; i != cs.entries.size(); ++i) {
+		if (cs.entries[i].tag == tag) {
+			
+			// used for calculating LRU
+			cs.entries[i].used_time = timer;
+			timer++;
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+void Cache::read(std::string _address)
+{
+	Address address = segment_address(_address);
+	bool exists = check_if_exists(address.tag, address.index);
+
+	if (exists) {
+		std::cout << "hit in L1 at address " << _address << std::endl;
+		return;
+	}
+
+	//TODO: look_in_next_level_cache()
+	find_place(address.index, address.tag);
+}
+
+
+void Cache::find_place(int index, int tag)
+{
+	CacheSet cs = m_cache[index];
+
+	// records which value in the set was least recently used LRU
+	unsigned int lowest_value = 0, lowest_index = 0;
+
+	for (size_t i = 0; i != cs.entries.size(); ++i) {
+		
+		// check to see if an empty spot was found
+		if (cs.entries[i].tag == -1) {
+			cs.entries[i].tag = tag;
+		}
+
+		if (cs.entries[i].used_time < lowest_value) {
+			lowest_value = cs.entries[i].used_time;
+			lowest_index = i;
+		}
+	}
+
+	// TODO: handle dirty bit depending on policy
+
+	// no emtpy spots found
+	cs.entries[lowest_index].tag = tag;
+	cs.entries[lowest_index].used_time = timer;
+	timer++;
 }
