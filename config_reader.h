@@ -10,8 +10,8 @@
 
 
 class ConfigReader {
-public:
-	bool m_virtual, m_tlb, m_l2;
+private:
+	bool m_virtual = false, m_tlb = false, m_l2 = false;
 
 	// different category options for the config
 	std::set<std::string> m_categories = {
@@ -33,17 +33,14 @@ public:
 	// read the configuration file
 	void read(std::string filename);
 
-	// prints the config information as specified in the write-up
-	void print();
-
 	// quick way to access config data
 	std::map<std::string, int>& operator[](std::string str);
 
 
 	// non-category specifications
-	const bool using_virtual() { return m_virtual; }
-	const bool using_tlb() { return m_tlb; }
-	const bool using_l2() { return m_l2; }
+	const bool Virtual() { return m_virtual; }
+	const bool TLB() { return m_tlb; }
+	const bool L2() { return m_l2; }
 };
 
 
@@ -125,9 +122,4 @@ std::map<std::string, int>& ConfigReader::operator[](std::string str)
 	else {
 		std::cout << "operator error in ConfigReader";
 	}
-}
-
-void ConfigReader::print() 
-{
-
 }
