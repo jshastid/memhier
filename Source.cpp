@@ -8,6 +8,6 @@ int main()
 	cr.read("trace.config");
 
 	Cache l1(cr["l1"]);
-
+	
 	return 0;
 }
