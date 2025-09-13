@@ -42,6 +42,7 @@ public:
 	std::map<std::string, int> m_config;
 	std::vector<CacheSet> m_cache;
 
+	int m_virtual_address_size = 0, m_physical_address_size = 0;
 	int n_sets = 0, set_size = 0, block_size = 0;
 	bool write_through_no_write_allocate = false;
 
@@ -53,19 +54,40 @@ public:
 
 public:
 
-	Cache(std::map<std::string, int> config);
+	Cache(std::map<std::string, int> config, std::map<std::string, int>* page_table);
 };
 
 
 
-Cache::Cache(std::map<std::string, int> config)
+Cache::Cache(std::map<std::string, int> config, std::map<std::string, int>* page_table_ptr = nullptr)
 	: m_config(config) 
 {
+
+	// get information for the cache size and specifications
 	n_sets = config["Number of sets"];
 	set_size = config["Set size"];
 	block_size = config["Line size"];
+
+	// get the virtual address size if there is a page size
+	if (page_table_ptr) {
+		int n_virtual_pages = (*page_table_ptr)["Number of virtual pages"];
+		int page_size = (*page_table_ptr)["Page size"];
+
+		int total_bytes_in_vmemory = n_virtual_pages * page_size;
+		m_virtual_address_size = calculate_bits_required(total_bytes_in_vmemory);
+	}
+
+	// get the physical page size
+	int n_physical_pages = (*page_table_ptr)["Number of physical pages"];
+	int page_size = (*page_table_ptr)["Page size"];
+	int total_bytes_in_memory = n_physical_pages * page_size;
+
+	m_physical_address_size = calculate_bits_required(total_bytes_in_memory);
+
+	// get the policy information
 	write_through_no_write_allocate = config["Write through/no write allocate"];
 
+	// create the cache
 	m_cache = std::vector<CacheSet>(n_sets, CacheSet(block_size, set_size));
 };
 
@@ -79,7 +101,9 @@ Address Cache::segment_address(std::string str)
 	int address_value = 0;
 	ss >> std::hex >> address_value;
 
-
+	int offset_bit_count = calculate_bits_required(block_size);
+	int index_bit_count = calculate_bits_required(set_size);
+	int tag_bit_count = m_physical_address_size - index_bit_count - offset_bit_count;
 
 	return Address();
 }

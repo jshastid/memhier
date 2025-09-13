@@ -8,7 +8,6 @@
 #include <unordered_map>
 
 
-
 class ConfigReader {
 private:
 	bool m_virtual = false, m_tlb = false, m_l2 = false;
