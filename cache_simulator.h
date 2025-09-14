@@ -17,7 +17,7 @@ struct CacheBlock {
 };
 
 struct CacheEntry {
-	int tag = -1;
+	int tag = -1, dirty = 0;
 	unsigned int used_time = -1;
 
 	CacheBlock cb;
@@ -50,7 +50,7 @@ public:
 	Cache* m_next_layer = nullptr;
 
 	int m_virtual_address_size = 0, m_physical_address_size = 0;
-	int n_sets = 0, set_size = 0, block_size = 0;
+	int n_sets = 0, set_size = 0, block_size = 0, page_size = 0;
 	bool write_through_no_write_allocate = false;
 
 	// splits up the address into a tag, index, and offset
@@ -63,7 +63,9 @@ public:
 	bool check_if_exists(int tag, int index);
 
 	// finds a place to put tag in cache set index. uses LRU eviction if needed
-	void find_place(int index, int tag);
+	void find_place(std::string _address);
+
+	void set_dirty_bit(int index, int tag);
 
 public:
 	// reads from memory at the specified address
@@ -92,7 +94,7 @@ Cache::Cache(std::map<std::string, int> config, std::string _name, std::map<std:
 	// get the virtual address size if there is a page size
 	if (page_table_ptr) {
 		int n_virtual_pages = (*page_table_ptr)["Number of virtual pages"];
-		int page_size = (*page_table_ptr)["Page size"];
+		page_size = (*page_table_ptr)["Page size"];
 
 		int total_bytes_in_vmemory = n_virtual_pages * page_size;
 		m_virtual_address_size = calculate_bits_required(total_bytes_in_vmemory);
@@ -100,7 +102,7 @@ Cache::Cache(std::map<std::string, int> config, std::string _name, std::map<std:
 
 	// get the physical page size
 	int n_physical_pages = (*page_table_ptr)["Number of physical pages"];
-	int page_size = (*page_table_ptr)["Page size"];
+	page_size = (*page_table_ptr)["Page size"];
 	int total_bytes_in_memory = n_physical_pages * page_size;
 
 	m_physical_address_size = calculate_bits_required(total_bytes_in_memory);
@@ -153,7 +155,6 @@ int Cache::calculate_bits_required(int n)
 }
 
 
-
 bool Cache::check_if_exists(int tag, int index)
 {
 	// select the set which the value should be
@@ -179,11 +180,11 @@ void Cache::read(std::string _address)
 	bool exists = check_if_exists(address.tag, address.index);
 
 	if (exists) {
-		std::cout << "hit in L1 at address " << _address << std::endl;
+		std::cout << "hit in " << name << " at address " << _address << std::endl;
 		return;
 	}
 
-	std::cout << "miss in L1 at address " << _address << std::endl;
+	std::cout << "miss in " << name << " at address " << _address << std::endl;
 
 	// read the value from the next layer
 	if (m_next_layer) {
@@ -192,13 +193,14 @@ void Cache::read(std::string _address)
 		std::cout << "Read from memory" << std::endl;
 	}
 
-	find_place(address.index, address.tag);
+	find_place(_address);
 }
 
 
-void Cache::find_place(int index, int tag)
+void Cache::find_place(std::string _address)
 {
-	CacheSet cs = m_cache[index];
+	Address address = segment_address(_address);
+	CacheSet& cs = m_cache[address.index];
 
 	// records which value in the set was least recently used LRU
 	unsigned int lowest_value = 0, lowest_index = 0;
@@ -207,7 +209,7 @@ void Cache::find_place(int index, int tag)
 		
 		// check to see if an empty spot was found
 		if (cs.entries[i].tag == -1) {
-			cs.entries[i].tag = tag;
+			cs.entries[i].tag = address.tag;
 		}
 
 		// update LRU meta if needed
@@ -217,10 +219,14 @@ void Cache::find_place(int index, int tag)
 		}
 	}
 
-	// TODO: handle dirty bit depending on policy
+	// handle write back policy dirty bit
+	if (cs.entries[lowest_index].dirty) {
+		m_next_layer->write(_address);
+		cs.entries[lowest_index].dirty = 0;
+	}
 
 	// no emtpy spots found
-	cs.entries[lowest_index].tag = tag;
+	cs.entries[lowest_index].tag = address.tag;
 	cs.entries[lowest_index].used_time = timer;
 	timer++;
 }
@@ -232,7 +238,43 @@ void Cache::attach(Cache* next_layer)
 }
 
 
-void Cache::write(std::string address)
+void Cache::write(std::string _address)
 {
+	Address address = segment_address(_address);
+	bool exists = check_if_exists(address.tag, address.index);
 
+	if (exists && write_through_no_write_allocate) {
+		std::cout << "wrote to " << _address << " in layer " << name << std::endl;
+
+		// write through is enabled, write to the next level
+		m_next_layer->write(_address);
+	}
+	else if (!exists && write_through_no_write_allocate) {
+
+		std::cout << "wrote to next layer in layer " << name << ", address: " << _address << std::endl;
+		// we just write to the next layer because it is a no-write-allocate
+		m_next_layer->write(_address);
+	}
+	else if (exists && !write_through_no_write_allocate){
+		std::cout << "wrote to " << _address << " and set dirty bit" << std::endl;
+		set_dirty_bit(address.index, address.tag);
+	}
+	else if (!exists && !write_through_no_write_allocate) {
+		std::cout << "brought " << _address << " into cache, wrote to it, and set dirty bit" << std::endl;
+		find_place(_address);
+		set_dirty_bit(address.index, address.tag);
+	}
+}
+
+
+void Cache::set_dirty_bit(int index, int tag)
+{
+	// select the set which the value should be
+	CacheSet& cs = m_cache[index % n_sets];
+
+	for (size_t i = 0; i != cs.entries.size(); ++i) {
+		if (cs.entries[i].tag == tag) {
+			cs.entries[i].dirty = 1;
+		}
+	}
 }
