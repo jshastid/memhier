@@ -64,8 +64,12 @@ int PT::evict_entry()
 void PT::update_address_time(int address)
 {
 	// erase the time->address mapping
-	m_time_address.erase(m_time_address.find(m_address_time[address]));
-	
+	std::unordered_map<int, int>::iterator itr = m_address_time.find(address);
+
+	if (itr != m_address_time.end()) {
+		m_time_address.erase(m_time_address.find(m_address_time[address]));
+	}
+
 	// set the entries to the new time
 	m_time_address[m_timer] = address;
 	m_address_time[address] = m_timer;
@@ -89,8 +93,13 @@ int PT::request(std::string _address)
 	if (m_present[address] == 0 && m_accessed_count < n_physical_pages) {
 		std::cout << "page not present and not allocated yet" << std::endl;
 		// allocate the next available physical page and increment used physical pages
-		m_v_to_phy[address] = n_physical_pages;
-		n_physical_pages++;
+		m_v_to_phy[address] = m_accessed_count;
+		m_present[address] = 1;
+		m_accessed_count++;
+
+		m_time_address[m_timer] = address;
+		m_address_time[address] = m_timer;
+		m_timer++;
 	}
 
 	// it is just not in memory so it is on disk. We dont simulate the disk part but
@@ -102,13 +111,18 @@ int PT::request(std::string _address)
 
 		// set the map
 		m_v_to_phy[address] = physical_address;
+		m_present[address] = 1;
+		update_address_time(address);
 	}
 
 	// the mapping exists and the page is present
 	else {
+		update_address_time(address);
 		std::cout << "page present" << std::endl;
-		return m_v_to_phy[address];
 	}
+
+
+	return m_v_to_phy[address];
 }
 
 
