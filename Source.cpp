@@ -2,7 +2,7 @@
 #include "config_reader.h"
 #include "cache_simulator.h"
 
-// TODO: add tlb, finish write, make print statements, make sure print prints own name
+// TODO: add tlb
 
 
 int main()
@@ -10,6 +10,8 @@ int main()
 	// read the configuration file
 	ConfigReader cr;
 	cr.read("trace.config");
+
+	TLB tlb(cr["tlb"], cr["pt"]);
 
 	// create the cache levels
 	Cache l1(cr["l1"], "L1", & cr["pt"]);

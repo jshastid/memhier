@@ -6,6 +6,7 @@
 #include <set>
 #include <unordered_map>
 #include <sstream>
+#include "tlb.h"
 
 
 struct CacheBlock {
