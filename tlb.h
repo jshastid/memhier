@@ -16,6 +16,8 @@ public:
 	int m_accessed_count = 0;
 
 	// used for LRU calculations
+	std::map<int, int> m_time_address;
+	std::unordered_map<int, int> m_address_time;
 	int m_timer = 0;
 
 	// this maps the virtual address to a physical one
@@ -24,6 +26,13 @@ public:
 	// lets us know if a virtual address currently points to a page that is not
 	// currently in memory
 	std::unordered_map<int, int> m_present;
+
+	// uses LRU to evict and make space for a new entry
+	int evict_entry();
+
+	// this is used to make sure the data structures are managing time correctly
+	void update_address_time(int address);
+
 
 	int n_virtual_pages = 0, n_physical_pages = 0;
 public:
@@ -35,7 +44,35 @@ public:
 };
 
 
+int PT::evict_entry()
+{
+	// get the physical address that will be freed up
+	int result = -1;
+	int address = m_time_address.begin()->second;
+	result = m_v_to_phy[address];
 
+	// erase the data structure entries
+	m_time_address.erase(m_time_address.begin());
+	m_address_time.erase(m_address_time.find(address));
+
+	// update the address valid bit
+	m_present[address] = 0;
+
+	return result;
+}
+
+void PT::update_address_time(int address)
+{
+	// erase the time->address mapping
+	m_time_address.erase(m_time_address.find(m_address_time[address]));
+	
+	// set the entries to the new time
+	m_time_address[m_timer] = address;
+	m_address_time[address] = m_timer;
+	
+	// incrememnt the clock
+	m_timer++;
+}
 
 int PT::request(std::string _address)
 {
@@ -44,12 +81,13 @@ int PT::request(std::string _address)
 	std::stringstream ss(_address);
 	ss >> std::hex >> address;
 
+
 	// check to see if it exists. if present bit is 0, either it does not exist
 	// in memory or it could have not been initialized yet
 
 	// has not been initalized yet
 	if (m_present[address] == 0 && m_accessed_count < n_physical_pages) {
-
+		std::cout << "page not present and not allocated yet" << std::endl;
 		// allocate the next available physical page and increment used physical pages
 		m_v_to_phy[address] = n_physical_pages;
 		n_physical_pages++;
@@ -58,7 +96,18 @@ int PT::request(std::string _address)
 	// it is just not in memory so it is on disk. We dont simulate the disk part but
 	// we still need to do LRU on current physical pages
 	else if (m_present[address] == 0) {
+		std::cout << "page not present" << std::endl;
+		// get the physical address of the evicted page
+		int physical_address = evict_entry();
 
+		// set the map
+		m_v_to_phy[address] = physical_address;
+	}
+
+	// the mapping exists and the page is present
+	else {
+		std::cout << "page present" << std::endl;
+		return m_v_to_phy[address];
 	}
 }
 

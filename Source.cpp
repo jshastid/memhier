@@ -11,7 +11,16 @@ int main()
 	ConfigReader cr;
 	cr.read("trace.config");
 
-	TLB tlb(cr["tlb"], cr["pt"]);
+	PT page_table(cr["pt"]);
+
+	// testing
+	while (true) {
+		std::string input;
+		std::getline(std::cin, input);
+
+		std::cout << page_table.request(input) << std::endl;
+	}
+
 
 	// create the cache levels
 	Cache l1(cr["l1"], "L1", & cr["pt"]);
