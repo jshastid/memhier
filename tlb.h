@@ -154,15 +154,32 @@ struct TLB_Address {
 
 
 class TLB {
-public:
+private:
 	int m_virtual_address_size = 0, m_physical_address_size = 0;
 	int n_sets = 0, set_size = 0, page_size = 0;
 	std::vector<TLB_Set> m_cache;
+
+	PT& page_table;
+
+	// used for LRU
+	std::vector<std::vector<int> > m_times;
+	int m_timer = 0;
 
 	int calculate_bits_required(int n);
 
 	TLB_Address segment_address(std::string _address);
 
+
+	void print()
+	{
+		for (int i = 0; i != m_cache.size(); ++i) {
+			std::cout << "\ntlb index " << i << "\n";
+			for (int j = 0; j != m_cache[i].entries.size(); ++j) {
+				std::cout << "\n   tag:" << m_cache[i].entries[j].tag << " translation:" << m_cache[i].entries[j].translation << "\n";
+			}
+		}
+	}
+	
 public:
 
 	int translate(std::string _address);
@@ -183,6 +200,7 @@ int TLB::calculate_bits_required(int n)
 
 
 TLB::TLB(std::map<std::string, int>& pt, std::map<std::string, int>& tlb, PT& page_table)
+	: page_table(page_table)
 {
 	n_sets = tlb["Number of sets"];
 	set_size = tlb["Set size"];
@@ -193,14 +211,59 @@ TLB::TLB(std::map<std::string, int>& pt, std::map<std::string, int>& tlb, PT& pa
 
 	m_cache = std::vector<TLB_Set>(n_sets, TLB_Set(set_size));
 
+	// calculate address space sizes
 	m_virtual_address_size = calculate_bits_required(n_virtual_pages * page_size);
 	m_physical_address_size = calculate_bits_required(n_physical_pages * page_size);
+
+	// create the structure to store access times for LRU
+	m_times = std::vector<std::vector<int> >(n_sets, std::vector<int>(set_size, 0));
 }
 
 int TLB::translate(std::string _address)
 {
 	TLB_Address address = segment_address(_address);
-	
+
+	// record least recently used value
+	int lowest_value = INT_MAX, lowest_index = 0;
+
+	// check to see if there are any open entries and record least recently used values
+	for (int i = 0; i != m_cache[address.index % n_sets].entries.size(); ++i) {
+		TLB_Entry& tlbe = m_cache[address.index % n_sets].entries[i];
+
+		// the spot is free because it has not been allocated yet
+		if (tlbe.tag == -1) {
+			tlbe.tag = address.tag;
+			tlbe.translation = page_table.request(_address);
+			m_times[address.index % n_sets][i] = m_timer;
+			m_timer++;
+
+			std::cout << "found empty spot for address" << std::endl;
+			print();
+			return tlbe.translation;
+		}
+		else if (tlbe.tag == address.tag) {
+			std::cout << "tlb address exists" << std::endl;
+			print();
+			return tlbe.translation;
+		}
+		
+		// check to see if the current value is the LRU
+		else if (m_times[address.index % n_sets][i] < lowest_value) {
+			std::cout << "evicted " << lowest_index << " of set " << address.index << " for address" << std::endl;
+			lowest_value = m_times[address.index % n_sets][i];
+			lowest_index = i;
+		}
+	}
+
+	// evict the LRU and return
+	TLB_Entry& tlbe = m_cache[address.index % n_sets].entries[lowest_index];
+	tlbe.tag = address.tag;
+	tlbe.translation = page_table.request(_address);
+	m_times[address.index % n_sets][lowest_index] = m_timer;
+	m_timer++;
+
+	print();
+	return tlbe.translation;
 }
 
 TLB_Address TLB::segment_address(std::string _address)

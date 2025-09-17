@@ -12,12 +12,14 @@ int main()
 	cr.read("trace.config");
 
 	PT page_table(cr["pt"]);
-	
+	TLB tlb(cr["pt"], cr["tlb"], page_table);
+
 	std::string input;
+
 
 	// testing
 	while (std::cin >> input) {
-		std::cout << page_table.request(input) << std::endl;
+		tlb.translate(input);
 	}
 
 
