@@ -12,12 +12,11 @@ int main()
 	cr.read("trace.config");
 
 	PT page_table(cr["pt"]);
+	
+	std::string input;
 
 	// testing
-	while (true) {
-		std::string input;
-		std::getline(std::cin, input);
-
+	while (std::cin >> input) {
 		std::cout << page_table.request(input) << std::endl;
 	}
 

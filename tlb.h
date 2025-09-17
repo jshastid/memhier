@@ -10,7 +10,7 @@
 
 
 class PT {
-public:
+private:
 	// this is used to record how many initial accesses there have been because
 	// the write-up says the first 1-n physical pages are allocated as 0-n before LRU is used
 	int m_accessed_count = 0;
@@ -91,7 +91,7 @@ int PT::request(std::string _address)
 
 	// has not been initalized yet
 	if (m_present[address] == 0 && m_accessed_count < n_physical_pages) {
-		std::cout << "page not present and not allocated yet" << std::endl;
+
 		// allocate the next available physical page and increment used physical pages
 		m_v_to_phy[address] = m_accessed_count;
 		m_present[address] = 1;
@@ -105,7 +105,7 @@ int PT::request(std::string _address)
 	// it is just not in memory so it is on disk. We dont simulate the disk part but
 	// we still need to do LRU on current physical pages
 	else if (m_present[address] == 0) {
-		std::cout << "page not present" << std::endl;
+
 		// get the physical address of the evicted page
 		int physical_address = evict_entry();
 
@@ -118,7 +118,6 @@ int PT::request(std::string _address)
 	// the mapping exists and the page is present
 	else {
 		update_address_time(address);
-		std::cout << "page present" << std::endl;
 	}
 
 
@@ -135,20 +134,89 @@ PT::PT(std::map<std::string, int>& pt)
 
 
 
-class TLB {
-public:
 
+struct TLB_Entry {
+	int tag = -1;
+	int translation = -1;
+};
 
-public:
+struct TLB_Set {
+	std::vector<TLB_Entry> entries;
 
-	TLB(std::map<std::string, int>& pt, std::map<std::string, int>& tlb);
+	TLB_Set(size_t set_size)
+		: entries(std::vector<TLB_Entry>(set_size)) {}
+};
+
+struct TLB_Address {
+	int tag = -1;
+	int index = 0;
 };
 
 
+class TLB {
+public:
+	int m_virtual_address_size = 0, m_physical_address_size = 0;
+	int n_sets = 0, set_size = 0, page_size = 0;
+	std::vector<TLB_Set> m_cache;
+
+	int calculate_bits_required(int n);
+
+	TLB_Address segment_address(std::string _address);
+
+public:
+
+	int translate(std::string _address);
+
+	TLB(std::map<std::string, int>& pt, std::map<std::string, int>& tlb, PT& page_table);
+};
 
 
-
-TLB::TLB(std::map<std::string, int>& pt, std::map<std::string, int>& tlb)
+int TLB::calculate_bits_required(int n)
 {
+	for (int i = 0; i != 32; ++i) {
+		if (n >> i == 0) return i - 1;
+	}
 
+	std::cout << "bit calculator error: given improper value" << std::endl;
+	return -1;
+}
+
+
+TLB::TLB(std::map<std::string, int>& pt, std::map<std::string, int>& tlb, PT& page_table)
+{
+	n_sets = tlb["Number of sets"];
+	set_size = tlb["Set size"];
+
+	int n_virtual_pages = pt["Number of virtual pages"];
+	int n_physical_pages = pt["Number of physical pages"];
+	page_size = pt["Page size"];
+
+	m_cache = std::vector<TLB_Set>(n_sets, TLB_Set(set_size));
+
+	m_virtual_address_size = calculate_bits_required(n_virtual_pages * page_size);
+	m_physical_address_size = calculate_bits_required(n_physical_pages * page_size);
+}
+
+int TLB::translate(std::string _address)
+{
+	TLB_Address address = segment_address(_address);
+	
+}
+
+TLB_Address TLB::segment_address(std::string _address)
+{
+	TLB_Address result;
+
+	int address = 0;
+	std::stringstream ss(_address);
+	ss >> std::hex >> address;
+
+	int n_bits_offset = calculate_bits_required(page_size);
+	int n_bits_index = calculate_bits_required(n_sets);
+	int n_bits_tag = m_virtual_address_size - n_bits_offset - n_bits_index;
+
+	result.index = (address << n_bits_tag) >> (n_bits_tag + n_bits_offset);
+	result.tag = address >> (n_bits_index + n_bits_tag);
+
+	return result;
 }
